@@ -1,3 +1,5 @@
+import re
+
 from .base import BaseTask, TaskType
 
 
@@ -18,28 +20,29 @@ class JmsSummaryTask(BaseTask):
         return ['mysql_client']
 
     def _task_get_jms_summary(self):
-        # 获取用户总数
-        sql = "SELECT COUNT(*) FROM users_user WHERE is_service_account=0"
+        # 获取活跃用户总数
+        sql = "SELECT COUNT(*) FROM users_user WHERE is_service_account=0 AND last_login IS NOT NULL"
         self.mysql_client.execute(sql)
         user_count = self.mysql_client.fetchone()[0]
         # 获取资产总数
         sql = "SELECT COUNT(*) FROM assets_asset"
         self.mysql_client.execute(sql)
         asset_count = self.mysql_client.fetchone()[0]
-        # 获取在线会话总数
-        sql = "SELECT COUNT(*) FROM terminal_session WHERE is_finished=0"
+        # 获取会话总数
+        sql = "SELECT COUNT(*) FROM terminal_session"
         self.mysql_client.execute(sql)
-        online_session = self.mysql_client.fetchone()[0]
+        sessions = self.mysql_client.fetchone()[0]
+
         # 获取基础平台为 Windows 及 Linux 的平台 ID
-        sql_1 = "SELECT base, id FROM assets_platform WHERE base=%s OR base=%s"
+        sql_1 = "SELECT type, id FROM assets_platform WHERE type=%s OR type=%s"
         # 获取基于某个平台的资产总数
         sql_2 = "SELECT COUNT(*) FROM assets_asset WHERE platform_id IN %s"
-        self.mysql_client.execute(sql_1, ('Windows', 'Linux'))
+        self.mysql_client.execute(sql_1, ('windows', 'linux'))
         result6_1 = self.mysql_client.fetchall()
         linux_id_list = []
         windows_id_list = []
-        for base, p_id in result6_1:
-            if base == 'Windows':
+        for type, p_id in result6_1:
+            if type == 'windows':
                 windows_id_list.append(p_id)
             else:
                 linux_id_list.append(p_id)
@@ -47,6 +50,16 @@ class JmsSummaryTask(BaseTask):
         linux_asset_count = self.mysql_client.fetchone()[0]
         self.mysql_client.execute(sql_2, (windows_id_list,))
         windows_asset_count = self.mysql_client.fetchone()[0]
+
+        # 获取数据库资产总数
+        sql_1 = "SELECT id FROM assets_platform WHERE category=%s"
+        # 获取基于某个平台的资产总数
+        sql_2 = "SELECT COUNT(*) FROM assets_asset WHERE platform_id IN %s"
+        self.mysql_client.execute(sql_1, ('database',))
+        result7_1 = self.mysql_client.fetchall()
+        self.mysql_client.execute(sql_2, (result7_1,))
+        database_asset_count = self.mysql_client.fetchone()[0]
+
         # 获取组织数量
         sql = "SELECT COUNT(*) FROM orgs_organization"
         self.mysql_client.execute(sql)
@@ -134,10 +147,17 @@ class JmsSummaryTask(BaseTask):
         last_3_month_ticket_count = self.mysql_client.fetchone()[0]
 
         info_dict = {
-            'user_count': user_count, 'windows_asset_count': windows_asset_count,
-            'online_session': online_session, 'organization_count': organization_count,
-            'max_login_count': max_login_count, 'linux_asset_count': linux_asset_count,
-            'asset_count': asset_count, 'max_connect_asset_count': max_connect_asset_count,
+            'user_count': user_count,
+            'sessions': sessions,
+            'asset_count': asset_count,
+            'organization_count': organization_count,
+
+            'linux_asset_count': linux_asset_count,
+            'windows_asset_count': windows_asset_count,
+            'database_asset_count': database_asset_count,
+
+            'max_login_count': max_login_count,
+            'max_connect_asset_count': max_connect_asset_count,
             'last_3_month_connect_asset_count': last_3_month_connect_asset_count,
             'last_3_month_max_login_count': last_3_month_max_login_count,
             'last_3_month_max_connect_asset_count': last_3_month_max_connect_asset_count,
@@ -155,18 +175,18 @@ class JmsSummaryTask(BaseTask):
         self.task_result.update(info_dict)
 
     def _task_get_chart_data(self):
-        # 按周用户登录折线图
+        # 3个月用户登录折线图
         sql = "SELECT DATE(datetime) AS d, COUNT(*) AS num FROM audits_userloginlog " \
-              "WHERE status=1 and DATE_SUB(CURDATE(), INTERVAL 6 DAY) <= datetime GROUP BY d"
+              "WHERE status=1 and DATE_SUB(CURDATE(),  INTERVAL 3 MONTH) <= datetime GROUP BY d"
         self.mysql_client.execute(sql)
         resp = self.mysql_client.fetchall()
         x = [str(i[0]) for i in resp]
         y = [i[1] for i in resp]
         self.task_result['user_login_chart'] = {'x': x, 'y': y}
 
-        # 按周资产登录折线图
+        # 3个月资产登录折线图
         sql = "SELECT DATE(date_start) AS d, COUNT(*) AS num FROM terminal_session " \
-              "WHERE DATE_SUB(CURDATE(), INTERVAL 6 DAY) <= date_start GROUP BY d"
+              "WHERE DATE_SUB(CURDATE(),  INTERVAL 3 MONTH) <= date_start GROUP BY d"
         self.mysql_client.execute(sql)
         resp = self.mysql_client.fetchall()
         x = [str(i[0]) for i in resp]
@@ -175,8 +195,8 @@ class JmsSummaryTask(BaseTask):
 
         # 月活跃用户柱状图
         sql = "SELECT username, count(*) AS num FROM audits_userloginlog " \
-              "WHERE status=1 and DATE_SUB(CURDATE(), INTERVAL 1 MONTH) <= datetime " \
-              "GROUP BY username ORDER BY num DESC LIMIT 5;"
+              "WHERE status=1 and DATE_SUB(CURDATE(), INTERVAL 3 MONTH) <= datetime " \
+              "GROUP BY username ORDER BY num DESC LIMIT 10;"
         self.mysql_client.execute(sql)
         resp = self.mysql_client.fetchall()
         x = [str(i[0]) for i in resp]
@@ -186,7 +206,7 @@ class JmsSummaryTask(BaseTask):
         # 近3个月活跃资产柱状图
         sql = "SELECT asset, count(*) AS num FROM terminal_session " \
               "WHERE DATE_SUB(CURDATE(), INTERVAL 3 MONTH) <= date_start " \
-              "GROUP BY asset ORDER BY num DESC LIMIT 5;"
+              "GROUP BY asset ORDER BY num DESC LIMIT 10;"
         self.mysql_client.execute(sql)
         resp = self.mysql_client.fetchall()
         x = [str(i[0]) for i in resp]
@@ -200,4 +220,27 @@ class JmsSummaryTask(BaseTask):
         self.mysql_client.execute(sql)
         self.task_result['protocol_chart'] = [
             {'name': i[0], 'value': i[1]} for i in self.mysql_client.fetchall()
+        ]
+
+        # 资产类型饼状图
+        sql = "SELECT b.type AS platform, count(*) AS num FROM assets_asset a, assets_platform b " \
+              "WHERE a.platform_id=b.id GROUP BY b.type ORDER BY num DESC LIMIT 10"
+        self.mysql_client.execute(sql)
+        self.task_result['platform_chart'] = [
+            {'name': i[0], 'value': i[1]} for i in self.mysql_client.fetchall()
+        ]
+
+        # 组件类型使用情况饼状图
+        sql = "SELECT a.name AS terminal, count(*) AS num FROM terminal a, terminal_session b " \
+              "WHERE b.terminal_id= a.id GROUP BY terminal ORDER BY num DESC"
+        self.mysql_client.execute(sql)
+        self.task_result['terminal_chart'] = [
+            {'name': re.findall(r'\[(.*?)\]', i[0])[0], 'value': i[1]} for i in self.mysql_client.fetchall()
+        ]
+
+        # 功能使用情况
+        sql = "SELECT name, category, `value` FROM settings_setting WHERE `value` = 'true'"
+        self.mysql_client.execute(sql)
+        self.task_result['settings_chart'] = [
+            {'name': i[0], 'category': i[1], 'value': i[2]} for i in self.mysql_client.fetchall()
         ]

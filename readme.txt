@@ -14,3 +14,7 @@ jms-inspect_cli --jms-config <file> --inspect-config <file> --machine-template <
 2、执行 compile.sh 即可
 3、如果编译的宿主机已经编译过脚本，执行 compile.sh -c 即可
 #####################
+
+3、单节点 mysql redis 地址获取
+docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' jms_mysql
+docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' jms_redis

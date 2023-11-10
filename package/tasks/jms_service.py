@@ -56,7 +56,7 @@ class JmsServiceTask(BaseTask):
         else:
             self.task_result['web_log_size'] = resp
         # 获取Core日志大小
-        core_log = os.path.join(volume_dir, 'core', 'logs')
+        core_log = os.path.join(volume_dir, 'core', 'data', 'logs')
         command = "cd %s;du -sh|awk '{print $1}'" % core_log
         resp, ok = self.do_command(command)
         if not ok:

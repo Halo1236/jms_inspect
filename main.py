@@ -114,7 +114,7 @@ class JumpServerInspector(object):
         ip_re = re.compile(r'((25[0-5]|2[0-4]\d|((1\d{2})|([1-9]?\d)))\.){3}(25[0-5]|2[0-4]\d|((1\d{2})|([1-9]?\d)))')
         unique_set, multiple_name = set(), None
         try:
-            with open(self._machine_config_path, encoding='gbk')as f:
+            with open(self._machine_config_path, encoding='utf-8')as f:
                 reader = csv.reader(f)
                 # 忽略首行(表头)
                 _ = next(reader)
@@ -210,7 +210,7 @@ class JumpServerInspector(object):
     def _get_do_machines(self):
         do_machines = self._machine_info_list
         for m in self._machine_info_list:
-            if m['type'] == 'MYSQL':
+            if m['type'] == 'MYSQL' or self.jms_config.get('ARCH') == 'standalone':
                 do_machines.append({
                     'name': '虚拟任务', 'type': 'VIRTUAL', 'valid': True,
                     'ssh_ip': m['ssh_ip'], 'ssh_port': m['ssh_port'],

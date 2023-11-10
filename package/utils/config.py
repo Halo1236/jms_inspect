@@ -16,7 +16,7 @@ class Config(object):
 
     def get_config_mapping(self):
         cf_mapping = {}
-        with open(self._config_path) as f_reader:
+        with open(self._config_path, encoding='utf-8') as f_reader:
             config_list = f_reader.readlines()
             for cf in config_list:
                 real_cf = cf.strip()

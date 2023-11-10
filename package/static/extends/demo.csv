@@ -1,6 +1,2 @@
-»úÆ÷Ãû,»úÆ÷ÀàĞÍ,IPµØÖ·,SSH¶Ë¿ÚºÅ,µÇÂ¼ÓÃ»§Ãû,µÇÂ¼ÃÜÂë
-JumpServer-Core(Beijing),JumpServer,10.1.13.214,22,root,Calong@2015
-JumpServer-MySQL(left),MySQL,10.1.13.218,22,root,Calong@2015
-JumpServer-MySQL(right),MySQL,10.1.13.173,22,root,Calong@2015
-JumpServer-Redis(Beijing),Redis,10.1.13.214,22,root,Calong@2015
-local-mac,Other,192.168.0.197,22,test,Password
+æœºå™¨å,æœºå™¨ç±»å‹,IPåœ°å€,SSHç«¯å£å·,ç™»å½•ç”¨æˆ·å,ç™»å½•å¯†ç 
+JumpServer-39,JumpServer,10.1.12.39,22,root,Calong@2015

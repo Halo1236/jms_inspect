@@ -134,7 +134,6 @@
             min-width: 150px;
         }
         td {
-            font-size: 12px;
             white-space:pre-line;
             word-wrap: break-word;
             word-break: break-all;
@@ -828,13 +827,92 @@ var zr={},Vr={};var Br=function(){function t(t,e,n){var i=this;this._sleepAfterS
         <div style="text-align: center">
             <div style="text-align: left; margin: 0 5%">
                 <h3>2.1 运营巡检</h3>
-                <small>
-                    当前共有{{ v.organization_count }}个组织，{{ v.user_count }}个用户，{{ v.asset_count }}个资产(Windows类型
-                    {{ v.windows_asset_count }}个，Linux类型 {{ v.linux_asset_count }}个)，{{ v.online_session }}个在线会话。
-                    最大单日登录次数{{ v.max_login_count }}次，最大单日访问资产数{{ v.max_connect_asset_count }}次, 详细指标数据参见下表。
-                </small>
+	            <table class="v-table">
+                    <caption>数据总览：</caption>
+                    <tr>
+                        <th>组织数量</th>
+                        <td>{{ v.organization_count }}</td>
+                    </tr>
+                    <tr>
+                        <th>活跃用户数量</th>
+                        <td>{{ v.user_count }}</td>
+                    </tr>
+                    <tr>
+                        <th>资产总数量</th>
+                        <td>{{ v.asset_count }}</td>
+                    </tr>
+                    <tr>
+                        <th>会话总数量</th>
+                        <td>{{ v.sessions }}</td>
+                    </tr>
+                </table>
+                <br>
+                <!-- 资产类型占比图 -->
+                <div id="platform_chart" class="myChart"></div>
+                <br>
+                <!-- 功能组件使用占比图 -->
+                <div id="terminal_chart" class="myChart"></div>
+            </div>
+        </div>
+        <div class="page-footer">
+            <div>第 {{ loop.index | get_page }} 页</div>
+            <div class="page-footer-company"></div>
+        </div>
+    </div>
+    <div class="page">
+        <div class="page-header"></div>
+        <div style="text-align: center">
+            <div style="text-align: left; margin: 0 5%">
+                <br>
+                <table>
+                    <caption>功能组件使用：</caption>
+                    <tr>
+                        <th>功能项</th>
+                        <th>分类</th>
+                        <th>是否启用</th>
+                    </tr>
+                    {% for t in v.settings_chart %}
+                    <tr>
+                        <td>{{ t.name }}</td>
+                        <td>{{ t.category }}</td>
+                        <td>{{ t.value }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+            </div>
+        </div>
+        <div class="page-footer">
+            <div>第 {{ loop.index | get_page }} 页</div>
+            <div class="page-footer-company"></div>
+        </div>
+    </div>
+    <div class="page">
+        <div class="page-header"></div>
+        <div style="text-align: center">
+            <div style="text-align: left; margin: 0 5%">
                 <br>
                 <table class="v-table">
+                    <caption>详细指标数据参见下表：</caption>
+                    <tr>
+                        <th>Windows类型资产</th>
+                        <td>{{ v.windows_asset_count }}</td>
+                    </tr>
+                    <tr>
+                        <th>Linux类型资产</th>
+                        <td>{{ v.linux_asset_count }}</td>
+                    </tr>
+                    <tr>
+                        <th>数据库类型资产</th>
+                        <td>{{ v.database_asset_count }}</td>
+                    </tr>
+                    <tr>
+                        <th>最大单日登录次数</th>
+                        <td>{{ v.max_login_count }}</td>
+                    </tr>
+                    <tr>
+                        <th>最大单日访问资产数</th>
+                        <td>{{ v.max_connect_asset_count }}</td>
+                    </tr>
                     <tr>
                         <th>近三月最大单日用户登录数</th>
                         <td>{{ v.last_3_month_max_login_count }}</td>
@@ -889,8 +967,6 @@ var zr={},Vr={};var Br=function(){function t(t,e,n){var i=this;this._sleepAfterS
                     </tr>
                 </table>
                 <br>
-                <hr>
-                <br>
                 <!-- 近3个月不同协议占比图 -->
                 <div id="protocol_chart" class="myChart"></div>
             </div>
@@ -942,7 +1018,7 @@ var zr={},Vr={};var Br=function(){function t(t,e,n){var i=this;this._sleepAfterS
         const userChart = echarts.init(document.getElementById('user_chart'));
         const userChartOption = {
             title: {
-                text: '按周用户登录数'
+                text: '近3个月用户登录数'
             },
             tooltip: {
                 trigger: "axis",
@@ -968,7 +1044,7 @@ var zr={},Vr={};var Br=function(){function t(t,e,n){var i=this;this._sleepAfterS
         const assetChart = echarts.init(document.getElementById('asset_chart'));
         const assetChartOption = {
             title: {
-                text: '按周资产登录数'
+                text: '近3个月资产登录数'
             },
             tooltip: {
                 trigger: "axis",
@@ -994,7 +1070,7 @@ var zr={},Vr={};var Br=function(){function t(t,e,n){var i=this;this._sleepAfterS
         const activeUserChart = echarts.init(document.getElementById('active_user_chart'));
         const activeUserChartOption = {
             title: {
-                text: '月活跃用户图'
+                text: '近3个月活跃用户图'
             },
             tooltip: {
                 trigger: "axis",
@@ -1026,13 +1102,13 @@ var zr={},Vr={};var Br=function(){function t(t,e,n){var i=this;this._sleepAfterS
                 type: 'bar',
                 data: {{ v.active_asset_chart.y }}
             }]
-        };
+        }
         activeAssetChart.setOption(activeAssetChartOption);
 
         const protocolChart = echarts.init(document.getElementById('protocol_chart'));
         const protocolChartOption = {
             title: {
-                text: '近3个月不同协议占比图'
+                text: '近3个月会话协议占比图'
             },
             tooltip: {
                 trigger: "item",
@@ -1051,19 +1127,93 @@ var zr={},Vr={};var Br=function(){function t(t,e,n){var i=this;this._sleepAfterS
                     borderWidth: 2
                   },
                   label: {
-                    show: false,
-                    position: 'center'
+                    show: true,
+                    formatter: '{b}: {c}'
                   },
                   emphasis: {
                     label: {
                       show: true,
-                      fontSize: 40,
+                      fontSize: 24,
                       fontWeight: 'bold'
                     }
                   },
                 data: {{ v.protocol_chart }}
             }]
-        };
+        }
         protocolChart.setOption(protocolChartOption);
+
+        const platformChart = echarts.init(document.getElementById('platform_chart'));
+        const platformChartOption = {
+            title: {
+                text: '资产平台类型占比图'
+            },
+            tooltip: {
+                trigger: "item",
+            },
+            legend: {
+                orient: 'orient',
+                top: '20%',
+                left: '5%'
+            },
+            series: [{
+                type: 'pie',
+                radius: ['40%', '70%'],
+                itemStyle: {
+                    borderRadius: 10,
+                    borderColor: '#fff',
+                    borderWidth: 2
+                  },
+                  label: {
+                    show: true,
+                    formatter: '{b}: {c}'
+                  },
+                  emphasis: {
+                    label: {
+                      show: true,
+                      fontSize: 24,
+                      fontWeight: 'bold'
+                    }
+                  },
+                data: {{ v.platform_chart }}
+            }]
+        };
+        platformChart.setOption(platformChartOption);
+
+        const terminalChart = echarts.init(document.getElementById('terminal_chart'));
+        const terminalChartOption = {
+            title: {
+                text: '会话调用组件类型占比图'
+            },
+            tooltip: {
+                trigger: "item",
+            },
+            legend: {
+                orient: 'orient',
+                top: '20%',
+                left: '5%'
+            },
+            series: [{
+                type: 'pie',
+                radius: ['40%', '70%'],
+                itemStyle: {
+                    borderRadius: 10,
+                    borderColor: '#fff',
+                    borderWidth: 2
+                  },
+                  label: {
+                    show: true,
+                    formatter: '{b}: {c}'
+                  },
+                  emphasis: {
+                    label: {
+                      show: true,
+                      fontSize: 24,
+                      fontWeight: 'bold'
+                    }
+                  },
+                data: {{ v.terminal_chart }}
+            }]
+        }
+        terminalChart.setOption(terminalChartOption);
     </script>
 </html>
