@@ -133,3 +133,4 @@ output/
 requirements/Python-3.8.6.tar.xz
 .*
 test/
+*.csv

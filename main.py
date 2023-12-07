@@ -10,6 +10,7 @@ from importlib import import_module
 from datetime import datetime
 
 from package.tasks.base import TaskExecutor, TaskType
+from package.utils.excel import ExcelPrinter
 from package.utils.log import logger
 from package.utils.tableprint import TablePrint
 from package.utils.tools import (
@@ -252,15 +253,17 @@ class JumpServerInspector(object):
 
     @staticmethod
     def _to_pdf(filename: str, content: dict, **kwargs):
-        filename += '.pdf'
-        logger.warning('此格式报告还未支持')
+        pass
+        # filename += '.pdf'
+        # logger.warning('此格式报告还未支持')
         # logger.info('文件生成成功，文件路径: %s' % filename)
 
     @staticmethod
     def _to_excel(filename: str, content: dict, **kwargs):
         filename += '.xlsx'
-        logger.warning('此格式报告还未支持')
-        # logger.info('文件生成成功，文件路径: %s' % filename)
+        excel_printer = ExcelPrinter()
+        excel_printer.save(filename, content)
+        logger.info('文件生成成功，文件路径: %s' % filename)
 
     def _to_all_type(self, filename: str, content: dict, **kwargs):
         self._to_pdf(filename, content, **kwargs)
