@@ -99,12 +99,12 @@ class ExcelPrinter:
             ws.append([item['name'], str(item['value'])])
 
         ws = wb.create_sheet('会话调用组件类型数')
-        ws.append(['日期', '调用组件数'])
+        ws.append(['组件', '调用组件数'])
         for item in context['v']['terminal_chart']:
             ws.append([item['name'], str(item['value'])])
 
         ws = wb.create_sheet('近3个月会话协议数')
-        ws.append(['日期', '会话协议数'])
+        ws.append(['协议', '会话协议数'])
         for item in context['v']['protocol_chart']:
             ws.append([item['name'], str(item['value'])])
 
@@ -129,8 +129,8 @@ class ExcelPrinter:
             ws.append([item, str(context['v']['active_asset_chart']['y'][index])])
 
         ws = wb.create_sheet('功能使用情况')
-        ws.append(['功能项', '是否启用'])
+        ws.append(['功能项', 'XPack', '是否启用'])
         for item in context['v']['settings_chart']:
-            ws.append([item['name'], str(item['value'])])
+            ws.append([item['name'], str(item['xpack']), str(item['value'])])
         self.__auto_adjust_column_width(ws)
         wb.save(filepath)

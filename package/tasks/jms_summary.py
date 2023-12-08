@@ -275,42 +275,43 @@ class JmsSummaryTask(BaseTask):
         self.mysql_client.execute(sql)
 
         focus_setting = {
-            'TICKETS_ENABLED': '工单',
-            'TERMINAL_RAZOR_ENABLED': 'Razor组件',
-            'TERMINAL_MAGNUS_ENABLED': 'Magnus组件',
-            'SMS_ENABLED': '短信认证',
-            'AUTH_LDAP': 'LDAP认证',
-            'AUTH_CAS': 'CAS认证',
-            'AUTH_OPENID': 'OIDC认证',
-            'AUTH_SAML2': 'SAML2认证',
-            'AUTH_OAUTH2': 'OAuth2认证',
-            'AUTH_DINGTALK': '钉钉认证',
-            'AUTH_WECOM': '企业微信认证',
-            'AUTH_FEISHU': '飞书认证',
-            'AUTH_RADIUS': 'Radius认证',
-            'OTP_IN_RADIUS': '使用Radius OTP',
-            'SECURITY_MFA_AUTH': '全局MFA认证',
-            'CHANGE_ACCOUNT_SECRET': '账号改密',
-            'ACCOUNT_BACKUP': '账号备份',
+            'TICKETS_ENABLED': ['工单', '是'],
+            'TERMINAL_RAZOR_ENABLED': ['Razor组件', '是'],
+            'TERMINAL_MAGNUS_ENABLED': ['Magnus组件', '否'],
+            'SMS_ENABLED': ['短信认证', '是'],
+            'AUTH_LDAP': ['LDAP认证', '否'],
+            'AUTH_CAS': ['CAS认证', '否'],
+            'AUTH_OPENID': ['OIDC认证', '是'],
+            'AUTH_SAML2': ['SAML2认证', '是'],
+            'AUTH_OAUTH2': ['OAuth2认证', '是'],
+            'AUTH_DINGTALK': ['钉钉认证', '是'],
+            'AUTH_WECOM': ['企业微信认证', '是'],
+            'AUTH_FEISHU': ['飞书认证', '是'],
+            'AUTH_RADIUS': ['Radius认证', '是'],
+            'OTP_IN_RADIUS': ['使用Radius OTP', '是'],
+            'SECURITY_MFA_AUTH': ['全局MFA认证', '否'],
+            'CHANGE_ACCOUNT_SECRET': ['账号改密', '是'],
+            'ACCOUNT_BACKUP': ['账号备份', '是'],
         }
 
         for i in self.mysql_client.fetchall():
             if focus_setting.get(i[0], None):
                 self.task_result['settings_chart'].append(
-                    {'name': focus_setting[i[0]], 'category': i[1], 'value': 'false' if i[2] == '0' else i[2]})
+                    {'name': focus_setting[i[0]][0], 'xpack': focus_setting[i[0]][1],
+                     'value': 'false' if i[2] == '0' else i[2]})
 
         sql = "SELECT count(*) FROM accounts_changesecretautomation"
         self.mysql_client.execute(sql)
         res = self.mysql_client.fetchone()
         if res:
             self.task_result['settings_chart'].append(
-                {'name': focus_setting['CHANGE_ACCOUNT_SECRET'],
-                 'category': 'xpack', 'value': 'true' if res[0] else 'false'})
+                {'name': focus_setting['CHANGE_ACCOUNT_SECRET'][0],
+                 'xpack': focus_setting['CHANGE_ACCOUNT_SECRET'][1], 'value': 'true' if res[0] else 'false'})
 
         sql = "SELECT count(*) FROM accounts_accountbackupautomation"
         self.mysql_client.execute(sql)
         res = self.mysql_client.fetchone()
         if res:
             self.task_result['settings_chart'].append(
-                {'name': focus_setting['ACCOUNT_BACKUP'],
-                 'category': 'xpack', 'value': 'true' if res[0] else 'false'})
+                {'name': focus_setting['ACCOUNT_BACKUP'][0],
+                 'xpack': focus_setting['ACCOUNT_BACKUP'][1], 'value': 'true' if res[0] else 'false'})

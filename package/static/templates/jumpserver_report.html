@@ -868,11 +868,13 @@ var zr={},Vr={};var Br=function(){function t(t,e,n){var i=this;this._sleepAfterS
                     <caption>功能组件使用：</caption>
                     <tr>
                         <th>功能项</th>
+	                    <th>XPack</th>
                         <th>是否启用</th>
                     </tr>
                     {% for t in v.settings_chart %}
                     <tr>
                         <td>{{ t.name }}</td>
+	                    <td>{{ t.xpack }}</td>
                         <td>{{ t.value }}</td>
                     </tr>
                     {% endfor %}
