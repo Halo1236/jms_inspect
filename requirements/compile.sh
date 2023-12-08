@@ -54,7 +54,7 @@ collect_static() {
 tar_bin() {
   cd ${project_dir}
   tar cf ${project_dir}/jms_inspect.tar jms_inspect_cli pkg
-  rm -rf pkg && rm -rf jms_inspect_cli
+  rm -rf pkg
   echo ""
   echo -e "\033[32mSuccess...\033[0m"
   echo -e "\033[32mScript path: ↓ ↓ ↓ ↓ ↓\033[0m"
