@@ -1,3 +1,4 @@
+import argparse
 import csv
 import getopt
 import os
@@ -5,6 +6,7 @@ import re
 import sys
 
 import pymysql
+import redis
 
 from importlib import import_module
 from datetime import datetime
@@ -14,7 +16,7 @@ from package.utils.excel import ExcelPrinter
 from package.utils.log import logger
 from package.utils.tableprint import TablePrint
 from package.utils.tools import (
-    is_machine_connect, get_current_datetime_display, get_current_timestamp
+    is_machine_connect, get_current_datetime_display, local_shell
 )
 from package.utils.config import Config
 from package.utils.html import HtmlPrinter
@@ -28,14 +30,30 @@ class JumpServerInspector(object):
         self._table_print = TablePrint()
         self._machine_info_list = []
         self._mysql_client = None
-        self._report_type = 'html'
+        self._redis_client = None
+        self._report_type = ''
+        self._jms_config_path = '/opt/jumpserver/config/config.txt'
         self._machine_config_path = os.path.join(BASE_PATH, 'package', 'static', 'extends', 'demo.csv')
-        self._script_config = os.path.join(BASE_PATH, 'package', 'static', 'config', 'config.txt')
+        self._script_config_path = None
         self.jms_config = None
         self.script_config = None
 
-    def get_mysql_client(self):
-        host = self.jms_config.get('DB_HOST')
+    def __get_mysql_host(self):
+        docker_ip = None
+        db_host = self.jms_config.get('DB_HOST')
+        if db_host == 'mysql':
+            docker_ip = local_shell("docker inspect -f '{{.NetworkSettings.Networks.jms_net.IPAddress}}' jms_mysql")
+        return docker_ip or db_host
+
+    def __get_redis_host(self):
+        docker_ip = None
+        db_host = self.jms_config.get('REDIS_HOST')
+        if db_host == 'redis':
+            docker_ip = local_shell("docker inspect -f '{{.NetworkSettings.Networks.jms_net.IPAddress}}' jms_redis")
+        return docker_ip or db_host
+
+    def get_mysql_client(self, get_conn=False):
+        host = self.__get_mysql_host()
         port = self.jms_config.get('DB_PORT')
         user = self.jms_config.get('DB_USER')
         password = self.jms_config.get('DB_PASSWORD')
@@ -44,8 +62,10 @@ class JumpServerInspector(object):
             host=host, port=int(port), user=user, password=password,
             database=database
         )
-        cur = connect.cursor()
-        return cur
+        self._mysql_client = connect.cursor()
+        if get_conn:
+            return connect
+        return self._mysql_client
 
     @property
     def mysql_client(self):
@@ -53,49 +73,38 @@ class JumpServerInspector(object):
             self._mysql_client = self.get_mysql_client()
         return self._mysql_client
 
+    def get_redis_client(self):
+        host = self.__get_redis_host()
+        port = self.jms_config.get('REDIS_PORT', 6379)
+        password = self.jms_config.get('REDIS_PASSWORD')
+        connect = redis.Redis(
+            host=host, port=int(port), password=password
+        )
+        self._redis_client = connect
+        return self._redis_client
+
     @property
-    def current_timestamp(self):
-        return get_current_timestamp()
+    def redis_client(self):
+        if self._redis_client is None:
+            self._redis_client = self.get_redis_client()
+        return self._redis_client
 
-    def _view_script_document(self):
-        from package.const import SCRIPT_DOCUMENT
-        script_document = SCRIPT_DOCUMENT % (self._script_config, self._machine_config_path)
-        logger.empty(script_document, br=False)
-
-    def _set_report_type(self, report_type):
-        support_report_type = ('html', 'excel', 'all')
-        if report_type in support_report_type:
-            self._report_type = report_type
-        else:
-            return '报告类型%s有误，只能为 [%s]' % (report_type, '、'.join(support_report_type))
-
-    def _check_config(self):
+    def _check_script_and_jms_config(self):
         """
         检查堡垒机的配置文件路径
         检查脚本配置文件
         :return:
         """
 
-        if not os.path.exists(self._script_config):
-            err_msg = '请检查文件路径: [%s]，文件不存在。' % self._script_config
+        if self._script_config_path is not None and not os.path.exists(self._jms_config_path):
+            err_msg = '请检查文件路径: [%s]，文件不存在。' % self._script_config_path
             return False, err_msg
 
         try:
-            self.jms_config = Config(self._script_config, config_prefix='JMS_')
-            self.script_config = Config(self._script_config)
+            self.jms_config = Config(self._jms_config_path)
+            self.script_config = Config(self._script_config_path)
         except ValueError as err:
             return False, str(err)
-
-        return True, None
-
-    def _get_machine_config_path(self):
-        """
-        获取待检查机器模板路径
-        :return:
-        """
-        if not os.path.exists(self._machine_config_path):
-            err_msg = '请检查文件路径: [%s]，文件不存在。' % self._machine_config_path
-            return False, err_msg
         return True, None
 
     def table_pretty_output(self):
@@ -106,30 +115,34 @@ class JumpServerInspector(object):
 
         self._table_print.show()
 
-    def _check_machine_config_is_valid(self):
+    def _check_machine_config(self):
         """
         检查用户输入的机器模板是否符合要求
         :return:
         """
+        if not os.path.exists(self._machine_config_path):
+            err_msg = '请检查文件路径: [%s]，文件不存在。' % self._machine_config_path
+            return False, err_msg
+
         logger.debug('正在检查模板文件中机器是否合法...')
         ip_re = re.compile(r'((25[0-5]|2[0-4]\d|((1\d{2})|([1-9]?\d)))\.){3}(25[0-5]|2[0-4]\d|((1\d{2})|([1-9]?\d)))')
         unique_set, multiple_name = set(), None
         try:
-            with open(self._machine_config_path, encoding='utf-8')as f:
+            with open(self._machine_config_path, encoding='gbk') as f:
                 reader = csv.reader(f)
                 # 忽略首行(表头)
                 _ = next(reader)
                 for row in reader:
-                    ip, port = row[2], row[3]
+                    ip, port, username, password = row[2], row[3], row[4], row[5]
                     machine_info = {
                         'name': row[0], 'type': row[1].upper(),
                         'ssh_ip': ip, 'ssh_port': port,
-                        'ssh_username': row[4], 'ssh_password': row[5]
+                        'ssh_username': username, 'ssh_password': password
                     }
 
                     if port.isdigit():
                         port = int(port)
-                    if ip_re.match(ip) and is_machine_connect(ip, port):
+                    if ip_re.match(ip) and is_machine_connect(ip, port, username, password, timeout=3):
                         machine_info['valid'] = True
                     else:
                         machine_info['valid'] = False
@@ -144,11 +157,38 @@ class JumpServerInspector(object):
         if not self._machine_info_list:
             err_msg = '没有获取到机器信息，请检查此文件内容: %s' % self._machine_config_path
             return False, err_msg
-
         if multiple_name:
             err_msg = '待巡检机器名称重复，名称为: %s' % multiple_name
             return False, err_msg
         return True, None
+
+    def __check_mysql_is_valid(self):
+        status, error = True, ''
+        try:
+            conn = self.get_mysql_client(get_conn=True)
+            conn.ping()
+        except Exception as err:
+            error = '连接 MySQL 数据库失败: %s' % err
+            status = False
+        return status, error
+
+    def __check_redis_is_valid(self):
+        status, error = True, ''
+        try:
+            conn = self.get_redis_client()
+            conn.ping()
+        except Exception as err:
+            error = '连接 Redis 数据库失败: %s' % err
+            status = False
+        return status, error
+
+    def _check_db_is_valid(self):
+        logger.debug('正在检查数据库是否可连接...')
+        status, error = self.__check_mysql_is_valid()
+        if not status:
+            return status, error
+
+        return self.__check_redis_is_valid()
 
     @staticmethod
     def _get_tasks_class():
@@ -164,6 +204,7 @@ class JumpServerInspector(object):
         return task_modules
 
     def get_all_task(self, need_task_type):
+        api_version = self.jms_config.get('CURRENT_VERSION', 'v2')[:2]
         tasks_class = self._get_tasks_class()
         return_value = []
         for task_class in tasks_class:
@@ -171,10 +212,11 @@ class JumpServerInspector(object):
             if task_type != TaskType.GENERATOR \
                     and task_type != need_task_type:
                 continue
-            if task_type == TaskType.VIRTUAL \
-                    and task_type != need_task_type:
+            if task_type == TaskType.GENERATOR \
+                    and need_task_type == TaskType.VIRTUAL:
                 continue
             task = task_class()
+            task.api_version = api_version
             do_params = task.get_do_params()
             for param in do_params:
                 task.set_do_params(param, getattr(self, param))
@@ -187,22 +229,22 @@ class JumpServerInspector(object):
         :return:
         """
         logger.debug('开始检查配置等相关信息...')
-        ok, err = self._check_config()
+        ok, err = self._check_script_and_jms_config()
         if not ok:
             logger.error(err)
             return False
 
-        ok, err = self._get_machine_config_path()
+        ok, err = self._check_db_is_valid()
         if not ok:
             logger.error(err)
             return False
 
-        ok, err = self._check_machine_config_is_valid()
+        ok, err = self._check_machine_config()
         if not ok:
             logger.error(err)
             return False
-
         self.table_pretty_output()
+
         answer = input('是否继续执行，本地任务只会执行有效资产(默认为 yes): ')
         if answer.lower() not in ['y', 'yes', '']:
             return False
@@ -210,19 +252,13 @@ class JumpServerInspector(object):
 
     def _get_do_machines(self):
         do_machines = self._machine_info_list
-        for m in self._machine_info_list:
-            if m['type'] == 'MYSQL' or self.jms_config.get('ARCH') == 'standalone':
-                do_machines.append({
-                    'name': '虚拟任务', 'type': 'VIRTUAL', 'valid': True,
-                    'ssh_ip': m['ssh_ip'], 'ssh_port': m['ssh_port'],
-                    'ssh_username': m['ssh_username'],
-                    'ssh_password': m['ssh_password']
-                })
-                break
+        do_machines.append({
+            'name': '虚拟任务', 'type': TaskType.VIRTUAL, 'valid': True
+        })
         return do_machines
 
     def do(self):
-        result_summary, v_info, machines, abnormal = {}, {}, [], []
+        result_summary, __, machines, abnormal = {}, {}, [], []
         for machine in self._get_do_machines():
             if machine.get('valid'):
                 tasks = self.get_all_task(machine['type'])
@@ -245,25 +281,21 @@ class JumpServerInspector(object):
         return result_summary
 
     @staticmethod
-    def _to_html(filename: str, content: dict, **kwargs):
-        filename += '.html'
-        html_printer = HtmlPrinter('jumpserver_report.html')
-        html_printer.save(filename, content)
-        logger.info('文件生成成功，文件路径: %s' % filename)
+    def _to_html(filepath: str, content: dict, **kwargs):
+        html_printer = HtmlPrinter(template_name='jumpserver_report.html')
+        filepath = html_printer.save(filepath, content)
+        logger.info('巡检完成，请将此路径下的巡检文件发送给技术工程师: \r\n%s' % filepath)
 
     @staticmethod
     def _to_pdf(filename: str, content: dict, **kwargs):
         pass
-        # filename += '.pdf'
-        # logger.warning('此格式报告还未支持')
-        # logger.info('文件生成成功，文件路径: %s' % filename)
 
     @staticmethod
     def _to_excel(filename: str, content: dict, **kwargs):
         filename += '.xlsx'
         excel_printer = ExcelPrinter()
         excel_printer.save(filename, content)
-        logger.info('文件生成成功，文件路径: %s' % filename)
+        logger.info('巡检完成，请将此路径下的巡检文件发送给技术工程师: \r\n%s' % filepath)
 
     def _to_all_type(self, filename: str, content: dict, **kwargs):
         self._to_pdf(filename, content, **kwargs)
@@ -282,10 +314,10 @@ class JumpServerInspector(object):
 
         output_path = os.path.join(BASE_PATH, 'output')
         filename = get_current_datetime_display()
-        result_file_name = os.path.join(output_path, filename)
+        report_filepath = os.path.join(output_path, 'JumpServer巡检报告-%s' % filename)
         os.makedirs(output_path, exist_ok=True)
 
-        func(filename=result_file_name, content=result_summary)
+        func(filepath=report_filepath, content=result_summary)
 
     def __get_machine_info(self):
         machine_info, jms_count, mysql_count, redis_count, other_count = [], 0, 0, 0, 0
@@ -313,8 +345,7 @@ class JumpServerInspector(object):
 
     def _set_task_global_info(self, result_summary: dict):
         # 设置报告时间
-        current_date = datetime.now().date()
-        result_summary['inspect_datetime'] = current_date
+        result_summary['inspect_datetime'] = get_current_datetime_display(format_file=False)
         # 设置巡检机器信息
         machines, *count_info = self.__get_machine_info()
         global_info = {
@@ -324,45 +355,24 @@ class JumpServerInspector(object):
         }
         result_summary['gb_info'] = global_info
 
-    def filter_options(self, options):
-        """
-        :param options: 命令行接收用户输入的参数
-        :return: 参数
-        """
-        opts = []
-        short_options = 'h'
-        long_options = [
-            'help', 'report-type=',
-            'inspect-config=', 'machine-template='
-        ]
-        try:
-            # 短参数后加`:` 表示该参数后需要加参数
-            opts, _ = getopt.getopt(
-                options, short_options, long_options
-            )
-        except getopt.GetoptError:
-            self._view_script_document()
-            self.exit_program()
-        if not opts:
-            self._view_script_document()
-            self.exit_program()
-
-        for opt, arg in opts:
-            if opt in ('-h', '--help'):
-                self._view_script_document()
-                self.exit_program()
-            elif opt in ('--report-type',):
-                err = self._set_report_type(arg)
-                if err is not None:
-                    logger.error(err)
-                    self.exit_program()
-            elif opt in ('--inspect-config',):
-                self._script_config = arg
-            elif opt in ('--machine-template',):
-                self._machine_config_path = arg
-            else:
-                self._view_script_document()
-                self.exit_program()
+    def process_cmd_line_args(self):
+        """ 解析用户输入 """
+        parser = argparse.ArgumentParser(description='JumpServer 巡检脚本')
+        parser.add_argument(
+            '-tp', '--report-type', default='html', choices=['html'], help='生成的报告类型'
+        )
+        parser.add_argument(
+            '-jc', '--jumpserver-config',
+            help='堡垒机配置文件路径，默认 %s' % self._jms_config_path
+        )
+        parser.add_argument(
+            '-mt', '--machine-template', required=True,
+            help='待巡检机器配置文件路径(示例查看: %s)' % self._machine_config_path
+        )
+        args = parser.parse_args()
+        self._report_type = args.report_type
+        self._jms_config_path = args.jumpserver_config
+        self._machine_config_path = args.machine_template
 
     @staticmethod
     def exit_program(show=False):
@@ -380,15 +390,15 @@ class JumpServerInspector(object):
         :return:
         """
         try:
-            self.filter_options(sys.argv[1:])
+            self.process_cmd_line_args()
             ok = self.pre_check()
             if ok:
+                logger.empty('巡检任务开始...')
                 result_summary = self.do()
                 self._set_task_global_info(result_summary)
                 self.store_file(result_summary, self._report_type)
             else:
                 self.exit_program(show=True)
-
         except Exception as err:
             logger.error('执行任务出错，错误: %s' % err)
             raise err

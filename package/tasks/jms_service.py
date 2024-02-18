@@ -1,9 +1,12 @@
 import os
 
 from .base import BaseTask, TaskType, TError
+from package.utils.api_version import wraps as version_wraps
 
 
 __all__ = ['JmsServiceTask']
+
+COMPUTE_SPACE_COMMAND = "cd %s;du -sh|awk '{print $1}'"
 
 
 class JmsServiceTask(BaseTask):
@@ -29,14 +32,14 @@ class JmsServiceTask(BaseTask):
         else:
             self.task_result['replay_total'] = resp
         # 已经使用
-        command = "cd %s;du -sh|awk '{print $1}'" % replay_path
+        command = COMPUTE_SPACE_COMMAND % replay_path
         resp, ok = self.do_command(command)
         if not ok:
             self.task_result['replay_used'] = TError
         else:
             self.task_result['replay_used'] = resp
         # 未使用
-        command = "df -h . --output=avail| awk '{if (NR > 1) {print $1}}'"
+        command = "cd %s;df -h . --output=avail| awk '{if (NR > 1) {print $1}}'" % replay_path
         resp, ok = self.do_command(command)
         if not ok:
             self.task_result['replay_unused'] = TError
@@ -45,19 +48,27 @@ class JmsServiceTask(BaseTask):
         # 录像路径
         self.task_result['replay_path'] = replay_path
 
+    @version_wraps('v2')
+    def _get_core_log_path(self, volume_dir):
+        return os.path.join(volume_dir, 'core', 'logs')
+
+    @version_wraps('v3')
+    def _get_core_log_path(self, volume_dir):
+        return os.path.join(volume_dir, 'core', 'data', 'logs')
+
     def _task_get_component_log_size(self):
         volume_dir = self.jms_config.get('VOLUME_DIR', '/')
         # 获取Web日志大小
         web_log = os.path.join(volume_dir, 'nginx', 'data', 'logs')
-        command = "cd %s;du -sh|awk '{print $1}'" % web_log
+        command = COMPUTE_SPACE_COMMAND % web_log
         resp, ok = self.do_command(command)
         if not ok:
             self.task_result['web_log_size'] = TError
         else:
             self.task_result['web_log_size'] = resp
         # 获取Core日志大小
-        core_log = os.path.join(volume_dir, 'core', 'data', 'logs')
-        command = "cd %s;du -sh|awk '{print $1}'" % core_log
+        core_log = self._get_core_log_path(volume_dir)
+        command = COMPUTE_SPACE_COMMAND % core_log
         resp, ok = self.do_command(command)
         if not ok:
             self.task_result['core_log_size'] = TError
@@ -65,7 +76,7 @@ class JmsServiceTask(BaseTask):
             self.task_result['core_log_size'] = resp
         # 获取Koko日志大小
         koko_path = os.path.join(volume_dir, 'koko', 'data', 'logs')
-        command = "cd %s;du -sh|awk '{print $1}'" % koko_path
+        command = COMPUTE_SPACE_COMMAND % koko_path
         resp, ok = self.do_command(command)
         if not ok:
             self.task_result['koko_log_size'] = TError
@@ -73,7 +84,7 @@ class JmsServiceTask(BaseTask):
             self.task_result['koko_log_size'] = resp
         # 获取Lion日志大小
         lion_path = os.path.join(volume_dir, 'lion', 'data', 'logs')
-        command = "cd %s;du -sh|awk '{print $1}'" % lion_path
+        command = COMPUTE_SPACE_COMMAND % lion_path
         resp, ok = self.do_command(command)
         if not ok:
             self.task_result['lion_log_size'] = TError
