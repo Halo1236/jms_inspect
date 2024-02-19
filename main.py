@@ -359,7 +359,7 @@ class JumpServerInspector(object):
         """ 解析用户输入 """
         parser = argparse.ArgumentParser(description='JumpServer 巡检脚本')
         parser.add_argument(
-            '-tp', '--report-type', default='html', choices=['html'], help='生成的报告类型'
+            '-tp', '--report-type', default='html', choices=['html', 'excel'], help='生成的报告类型'
         )
         parser.add_argument(
             '-jc', '--jumpserver-config',

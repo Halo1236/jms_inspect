@@ -1,7 +1,6 @@
 #!/bin/bash
 
 install_lib() {
-  yum -y upgrade
   yum -y install zlib-devel bzip2-devel openssl-devel ncurses-devel mysql-devel readline-devel tk-devel gcc make libffi-devel python3-devel
 }
 
